@@ -72,6 +72,23 @@ These can also be set via CLI options: `bdui start --host 0.0.0.0 --port 8080`
 - 🔗 Alternatively, use `npm link` to link the package globally and run
   `bdui start` from any project.
 
+### Restoring the repository's Beads tracker
+
+From the repository root, use `bd bootstrap --dry-run` to inspect the recovery
+plan, then `bd bootstrap --yes`. On a fresh clone, bootstrap imports the
+git-tracked `.beads/issues.jsonl` into a local Dolt database; on an existing
+database it validates the setup instead. Do not use `bd init --force` here: it
+can replace local issue data. Check the result with `bd status --json`,
+`bd ready --json`, and `bd list --status open --json` (the last two should agree
+on unblocked open work, but blocked open issues will not appear in `ready`).
+
+After closing or updating an issue with `bd`, keep the tracked JSONL snapshot in
+sync before committing: `bd export -o .beads/issues.jsonl`, then review
+`git diff -- .beads/issues.jsonl`. Newer `bd` versions may reserialize _all_
+records, so check that the export preserves IDs and unrelated fields before
+accepting a bulk diff. Do not import an old JSONL snapshot into a database with
+newer work; `bd import` upserts existing issues and can revert their state.
+
 ## Debug Logging
 
 - The codebase uses the `debug` package with namespaces like `beads-ui:*`.

@@ -140,6 +140,39 @@ describe('views/list', () => {
     expect(window.location.hash).toBe('#/issues?issue=UI-1');
   });
 
+  test('renders compact dependency and dependent counts from pushed issues', async () => {
+    document.body.innerHTML = '<aside id="mount" class="panel"></aside>';
+    const mount = /** @type {HTMLElement} */ (document.getElementById('mount'));
+    const issue_stores = createTestIssueStores();
+    issue_stores.getStore('tab:issues').applyPush({
+      type: 'snapshot',
+      id: 'tab:issues',
+      revision: 1,
+      issues: [
+        { id: 'UI-1', dependency_count: 2, dependent_count: 3 },
+        { id: 'UI-2', dependency_count: 0, dependent_count: 0 }
+      ]
+    });
+
+    const view = createListView(
+      mount,
+      async () => [],
+      undefined,
+      undefined,
+      undefined,
+      issue_stores
+    );
+    await view.load();
+
+    const counts = mount.querySelector('tr[data-issue-id="UI-1"] .deps-col');
+    expect(counts?.querySelector('.dep-count')?.textContent).toBe('→2');
+    expect(counts?.querySelector('.dependent-count')?.textContent).toBe('←3');
+    expect(
+      mount.querySelector('tr[data-issue-id="UI-2"] .deps-indicator')
+    ).toBeNull();
+    view.destroy();
+  });
+
   test('filters by status and search', async () => {
     document.body.innerHTML = '<aside id="mount" class="panel"></aside>';
     const mount = /** @type {HTMLElement} */ (document.getElementById('mount'));

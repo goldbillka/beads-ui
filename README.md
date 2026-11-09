@@ -9,7 +9,7 @@
   <a href="https://www.npmjs.com/package/beads-ui"><img src="https://img.shields.io/npm/v/beads-ui.svg" alt="npm Version"></a>
   <a href="https://semver.org"><img src="https://img.shields.io/:semver-%E2%9C%93-blue.svg" alt="SemVer"></a>
   <a href="https://github.com/goldbillka/beads-ui/actions/workflows/ci.yml"><img src="https://github.com/goldbillka/beads-ui/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/npm/l/eslint_d.svg" alt="MIT License"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/npm/l/beads-ui.svg" alt="MIT License"></a>
   <br>
   <br>
 </div>
@@ -39,15 +39,15 @@ See `bdui --help` for options.
 
 **Issues**
 
-![Issues view](media/bdui-issues.png)
+![Issues view](https://raw.githubusercontent.com/goldbillka/beads-ui/main/media/bdui-issues.png)
 
 **Epics**
 
-![Epics view](media/bdui-epics.png)
+![Epics view](https://raw.githubusercontent.com/goldbillka/beads-ui/main/media/bdui-epics.png)
 
 **Board**
 
-![Board view](media/bdui-board.png)
+![Board view](https://raw.githubusercontent.com/goldbillka/beads-ui/main/media/bdui-board.png)
 
 ## Environment variables
 

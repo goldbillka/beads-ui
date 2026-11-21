@@ -13,23 +13,22 @@ push‑only data flow used between the browser SPA and the local Node.js server.
 
 - Local‑first single‑page app served by a localhost HTTP server
 - WebSocket for data (request/response + server push events)
-- Server bridges UI intents to the `bd` CLI and watches the active beads
-  database for changes
+- Server bridges UI intents to the `bd` CLI and watches the active workspace's
+  Beads storage location for changes
 
 ```
 +--------------+          ws://127.0.0.1:PORT/ws          +--------------------+
 |  Browser SPA | <--------------------------------------> | HTTP + WS Server   |
 |  (ESM, DOM)  |   requests (JSON) / replies + events     |  (Node.js, ESM)    |
 +--------------+                                          +---------+----------+
-        ^                                                            |
-        |                                                            v
-        |                                                       +----+-----+
-        |                                                       |   bd     |
-        |                                                       |  (CLI)   |
-        |                                                       +----+-----+
-        |                                                            |
-        |                                     watches                v
-        |------------------------------------ changes --------> [ SQLite DB ]
+                                                               invokes | | watches
+                                                                       v v
+                                                               +--------+ +---------------------+
+                                                               | bd CLI | | SQLite .beads/*.db  |
+                                                               +---+----+ | or metadata-backed  |
+                                                                   |      | .beads/ directory   |
+                                                                   +----> +---------------------+
+                                                                 reads/writes
 ```
 
 ## Components and Responsibilities
@@ -48,10 +47,13 @@ push‑only data flow used between the browser SPA and the local Node.js server.
   - Web: `server/app.js` (Express app), `server/index.js` (startup and wiring)
   - WebSocket: `server/ws.js` (attach server, parse, validate, dispatch
     handlers, broadcast events)
-  - bd bridge: `server/bd.js` (spawn `bd`, inject `--db` consistently, JSON
-    helpers)
-  - DB resolution/watch: `server/db.js` (resolve active DB path),
-    `server/watcher.js` (schedule list refresh)
+  - bd bridge: `server/bd.js` (spawn `bd`, set `BEADS_DB` for a discovered
+    SQLite DB, JSON helpers)
+  - Storage resolution/watch: `server/db.js` (resolve SQLite file or
+    metadata-backed workspace directory), `server/watcher.js` (detect changes
+    and schedule list refresh)
+  - List adapters: `server/list-adapters.js` (map subscriptions, including
+    `ready-issues`, to `bd` reads)
   - Config: `server/config.js` (bind to `127.0.0.1`, default port 3000)
 
 ## Data Flow
@@ -61,8 +63,9 @@ push‑only data flow used between the browser SPA and the local Node.js server.
 2. Server validates and maps the request to a `bd` command (no shell; args array
    only).
 3. Server replies with `{ id, ok, type, payload }` or `{ id, ok:false, error }`.
-4. Independent of requests, the DB watcher schedules a refresh for active list
+4. The storage watcher schedules a debounced refresh for active list
    subscriptions; clients receive `snapshot`/`upsert`/`delete` envelopes.
+   Mutations also trigger a watcher-or-timeout refresh gate.
 
 ## Protocol (v2.0.0)
 
@@ -112,8 +115,10 @@ Rationale
 
 - Use `--json` for read commands to ensure typed payloads.
 - Avoid shell invocation; pass args array to `spawn` to prevent injection.
-- Always inject a resolved `--db <path>` so watcher and CLI operate on the same
-  database.
+- List adapters pass the active workspace as `cwd` to `bd`. `server/bd.js` sets
+  `BEADS_DB` for a discovered local SQLite file; it does not inject `--db` or
+  force the global fallback path, so non-SQLite autodetection remains available.
+  Mutation handlers currently omit `cwd` and run from the server process cwd.
 
 ## Issue Data Model (wire)
 
@@ -162,31 +167,37 @@ Notes
 
 ## Watcher Design
 
-- The server resolves the active beads SQLite DB path (see
+- The server resolves a local SQLite file or, when no SQLite file takes
+  precedence, a workspace `.beads` directory containing `metadata.json` (see
   `docs/db-watching.md`).
-- File watcher schedules list refresh; the server publishes subscription
-  envelopes. UI re-renders from local per-subscription stores.
+- SQLite: watch the parent directory and filter by DB filename. Metadata-backed
+  workspaces (for example Dolt): watch the `.beads` directory. The watcher
+  debounces events and applies a cooldown; the server also coalesces refreshes.
+- `set-workspace` re-resolves storage and rebinds the watcher when the resolved
+  path changes. The server publishes subscription envelopes; the UI re-renders
+  from per-subscription stores.
 
 ## Risks & Open Questions
 
-- Create flow not implemented in server handlers
-  - Owner: Server
-  - Next: Add `create-issue` handler and tests; wire minimal UI affordance
-- Ready list support missing end‑to‑end
-  - Owner: Server + UI
-  - Next: Add `list-ready` handler and a list filter in UI
-- Backpressure when many updates arrive
-  - Owner: Server
-  - Next: Coalesce broadcast events; consider debounce window
-- Large databases and payload size
-  - Owner: UI
-  - Next: Add incremental refresh (fetch issue by id on hints)
-- Cross‑platform DB path resolution nuances
-  - Owner: Server
-  - Next: Expand tests for Windows/macOS/Linux; document overrides
-- Acceptance text editing
+- New-issue follow-up uses removed `list-issues` RPC
   - Owner: UI + Server
-  - Status: Implemented via `edit-text` + `--acceptance-criteria`
+  - Next: Return the created ID in the `create-issue` reply and use it directly
+    for navigation and labels; `app/views/new-issue-dialog.js` currently tries a
+    legacy `list-issues` read after the create acknowledgement.
+- Workspace switching does not redirect mutation commands
+  - Owner: Server
+  - Next: Pass the current workspace root as `cwd` to mutation and follow-up
+    `bd` calls in `server/ws.js`; currently these calls use the process cwd,
+    while subscription reads use the selected workspace.
+- Large lists still require full `bd` reads on each refresh
+  - Owner: Server + UI
+  - Next: Measure large-workspace read and snapshot costs; consider bounded or
+    paginated subscriptions. `upsert`/`delete` deltas reduce pushed updates but
+    do not avoid fetching the list from `bd`.
+- Cross-platform path resolution coverage
+  - Owner: Server
+  - Next: Add Windows/macOS path and filesystem-watcher integration coverage;
+    current DB resolver tests primarily use POSIX-style paths.
 
 ---
 
